@@ -10,20 +10,17 @@ from itertools import combinations
 from sklearn.linear_model import LinearRegression
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import roc_curve
+from sklearn.metrics import roc_auc_score
 import statsmodels.api as sm
 from importlib import reload
 from matplotlib import pyplot as plt
-#reload(sys)
-#sys.setdefaultencoding( "utf-8")
-#from scorecard_functions import *
+reload(sys)
+sys.setdefaultencoding( "utf-8")
+from scorecard_functions import *
 from sklearn.linear_model import LogisticRegressionCV
-
 # -*- coding: utf-8 -*-
-import os 
-os.chdir(r'/home/z999/Documents/277_安迪生_金融信贷风控的机器学习模型/第四章/')
-from scorecard_functions_V3 import *
-os.chdir(r'/home/z999/Documents/277_安迪生_金融信贷风控的机器学习模型/第三章/')
-#%%
+
 ################################
 ######## UDF: 自定义函数 ########
 ################################
@@ -80,7 +77,7 @@ def MakeupRandom(x, sampledList):
 #Step 0: 数据分析的初始工作, 包括读取数据文件、检查用户Id的一致性等#
 ############################################################
 
-folderOfData = '/home/z999/Documents/277_安迪生_金融信贷风控的机器学习模型/第三章/'
+folderOfData = '/Users/Code/Data Collections/bank default/'
 data1 = pd.read_csv(folderOfData+'PPD_LogInfo_3_1_Training_Set.csv', header = 0)
 data2 = pd.read_csv(folderOfData+'PPD_Training_Master_GBK_3_1_Training_Set.csv', header = 0,encoding = 'gbk')
 data3 = pd.read_csv(folderOfData+'PPD_Userupdate_Info_3_1_Training_Set.csv', header = 0)
@@ -181,7 +178,7 @@ for tw in time_window:
 allData = pd.concat([data2.set_index('Idx'), data3GroupbyIdx.set_index('Idx'), data1GroupbyIdx.set_index('Idx')],axis= 1)
 allData.to_csv(folderOfData+'allData_0.csv',encoding = 'gbk')
 
-#%%
+
 
 
 #######################################
@@ -209,7 +206,7 @@ for col in allFeatures:
 
 categorical_var = [i for i in allFeatures if i not in numerical_var]
 
-#%%
+
 #检查变量的最多值的占比情况,以及每个变量中占比最大的值
 records_count = allData.shape[0]
 col_most_values,col_large_value = {},{}
@@ -225,7 +222,7 @@ pcnt = list(col_most_values_df[:500]['max percent'])
 vars = list(col_most_values_df[:500].index)
 plt.bar(range(len(pcnt)), height = pcnt)
 plt.title('Largest Percentage of Single Value in Each Variable')
-#%%
+
 #计算多数值占比超过90%的字段中，少数值的坏样本率是否会显著高于多数值
 large_percent_cols = list(col_most_values_df[col_most_values_df['max percent']>=0.9].index)
 bad_rate_diff = {}
@@ -305,7 +302,7 @@ allData.to_csv(folderOfData+'allData_1.csv', header=True,encoding='gbk', columns
 
 allData = pd.read_csv(folderOfData+'allData_1.csv', header=0,encoding='gbk')
 
-#%%
+
 
 
 ###################################
@@ -319,13 +316,13 @@ allData = pd.read_csv(folderOfData+'allData_1.csv', header=0,encoding='gbk')
 '''
 
 #for each categorical variable, if it has distinct values more than 5, we use the ChiMerge to merge it
-folderOfData = 'D:/BaiduNetdiskDownload/277_安迪生_金融信贷风控的机器学习模型/第三章/'
-trainData = pd.read_csv(folderOfData+'allData_1.csv',header = 0, encoding='gbk')#,dtype=object
+
+trainData = pd.read_csv(folderOfData+'allData_1.csv',header = 0, encoding='gbk',dtype=object)
 allFeatures = list(trainData.columns)
 allFeatures.remove('ListingInfo')
 allFeatures.remove('target')
 #allFeatures.remove('Idx')
-#%%
+
 #将特征区分为数值型和类别型
 numerical_var = []
 for var in allFeatures:
@@ -341,7 +338,7 @@ for col in categorical_var:
     #for Chinese character, upper() is not valid
     if col not in ['UserInfo_7','UserInfo_9','UserInfo_19']:
         trainData[col] = trainData[col].map(lambda x: str(x).upper())
-#%%
+
 
 '''
 对于类别型变量，按照以下方式处理
@@ -402,7 +399,7 @@ for col in categorical_var:
             var_WOE[col] = WOE_IV['WOE']
             var_IV[col] = WOE_IV['IV']
 
-#%%
+
 '''
 对于连续型变量，处理方式如下：
 1，利用卡方分箱法将变量分成5个箱
@@ -468,7 +465,7 @@ for col in numerical_var:
     var_WOE[col] = WOE_IV['WOE']
     #del trainData[col]
 
-#%%
+
 
 trainData.to_csv(folderOfData+'allData_2.csv', header=True,encoding='gbk', columns = trainData.columns, index=False)
 
@@ -488,11 +485,27 @@ with open(folderOfData+'var_cutoff.pkl',"wb") as f:
 with open(folderOfData+'merged_features.pkl',"wb") as f:
     f.write(pickle.dumps(merged_features))
 
-#########################################################
-# Step 4: Select variables with IV > 0.02 and assign WOE#
-#########################################################
+########################################
+# Step 4: WOE编码后的单变量分析与多变量分析#
+########################################
 trainData = pd.read_csv(folderOfData+'allData_2.csv', header=0, encoding='gbk')
 
+
+with open(folderOfData+'var_WOE.pkl',"rb") as f:
+    var_WOE = pickle.load(f)
+
+with open(folderOfData+'var_IV.pkl',"rb") as f:
+    var_IV = pickle.load(f)
+
+
+with open(folderOfData+'var_cutoff.pkl',"rb") as f:
+    var_cutoff = pickle.load(f)
+
+
+with open(folderOfData+'merged_features.pkl',"rb") as f:
+    merged_features = pickle.load(f)
+
+#将一些看起来像数值变量实际上是类别变量的字段转换成字符
 num2str = ['SocialNetwork_13','SocialNetwork_12','UserInfo_6','UserInfo_5','UserInfo_10','UserInfo_17']
 for col in num2str:
     trainData[col] = trainData[col].map(lambda x: str(x))
@@ -515,9 +528,7 @@ trainData.to_csv(folderOfData+'allData_3.csv', header=True,encoding='gbk', colum
 
 
 
-#%%
-
-### (i) select the features with IV above the thresould
+### (i) 选择IV高于阈值的变量
 trainData = pd.read_csv(folderOfData+'allData_3.csv', header=0,encoding='gbk')
 all_IV = list(var_IV.values())
 all_IV = sorted(all_IV, reverse=True)
@@ -525,9 +536,9 @@ plt.bar(x=range(len(all_IV)), height = all_IV)
 iv_threshould = 0.02
 varByIV = [k for k, v in var_IV.items() if v > iv_threshould]
 
-#%%
 
-### (ii) check the collinearity of any pair of the features with WOE after (i)
+
+### (ii) 检查WOE编码后的变量的两两线性相关性
 
 var_IV_selected = {k:var_IV[k] for k in varByIV}
 var_IV_sorted = sorted(var_IV_selected.items(), key=lambda d:d[1], reverse = True)
@@ -551,7 +562,7 @@ for i in range(len(var_IV_sorted)-1):
 
 var_IV_sortet_2 = [i for i in var_IV_sorted if i not in removed_var]
 
-### (iii) check the multi-colinearity according to VIF > 10
+### (iii）检查是否有变量与其他所有变量的VIF > 10
 for i in range(len(var_IV_sortet_2)):
     x0 = trainData[var_IV_sortet_2[i]+'_WOE']
     x0 = np.array(x0)
@@ -568,6 +579,74 @@ for i in range(len(var_IV_sortet_2)):
 
 
 
+#########################
+# Step 5: 应用逻辑回归模型#
+#########################
+multi_analysis = [i+'_WOE' for i in var_IV_sortet_2]
+y = trainData['target']
+X = trainData[multi_analysis].copy()
+X['intercept'] = [1]*X.shape[0]
+
+
+LR = sm.Logit(y, X).fit()
+summary = LR.summary2()
+pvals = LR.pvalues.to_dict()
+params = LR.params.to_dict()
+
+#发现有变量不显著，因此需要单独检验显著性
+varLargeP = {k: v for k,v in pvals.items() if v >= 0.1}
+varLargeP = sorted(varLargeP.items(), key=lambda d:d[1], reverse = True)
+varLargeP = [i[0] for i in varLargeP]
+p_value_list = {}
+for var in varLargeP:
+    X_temp = trainData[var].copy().to_frame()
+    X_temp['intercept'] = [1] * X_temp.shape[0]
+    LR = sm.Logit(y, X_temp).fit()
+    p_value_list[var] = LR.pvalues[var]
+for k,v in p_value_list.items():
+    print("{0} has p-value of {1} in univariate regression".format(k,v))
+
+
+#发现有变量的系数为正，因此需要单独检验正确性
+varPositive = [k for k,v in params.items() if v >= 0]
+coef_list = {}
+for var in varPositive:
+    X_temp = trainData[var].copy().to_frame()
+    X_temp['intercept'] = [1] * X_temp.shape[0]
+    LR = sm.Logit(y, X_temp).fit()
+    coef_list[var] = LR.params[var]
+for k,v in coef_list.items():
+    print("{0} has coefficient of {1} in univariate regression".format(k,v))
+
+
+selected_var = [multi_analysis[0]]
+for var in multi_analysis[1:]:
+    try_vars = selected_var+[var]
+    X_temp = trainData[try_vars].copy()
+    X_temp['intercept'] = [1] * X_temp.shape[0]
+    LR = sm.Logit(y, X_temp).fit()
+    #summary = LR.summary2()
+    pvals, params = LR.pvalues, LR.params
+    del params['intercept']
+    if max(pvals)<0.1 and max(params)<0:
+        selected_var.append(var)
+
+LR.summary2()
+
+y_pred = LR.predict(X_temp)
+roc_auc_score(trainData['target'], y_pred)
 
 
 
+#########################
+# Step 6: 尺度化与性能检验#
+#########################
+scores = Prob2Score(y_pred, 200, 100)
+plt.hist(score,bins=100)
+
+scorecard = pd.DataFrame({'y_pred':y_pred, 'y_real':list(trainData['target']),'score':scores})
+KS(scorecard,'score','y_real')
+ROC_AUC(df, score, target)
+
+# 也可用sklearn带的函数
+roc_auc_score(trainData['target'], y_pred)
